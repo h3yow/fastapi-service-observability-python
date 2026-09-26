@@ -49,3 +49,8 @@ def setup_observability(
 
     setattr(app, SETUP_ATTR, registry)
     return registry
+
+
+def get_registry(app: FastAPI) -> MetricsRegistry | None:
+    """Return the registry attached by :func:`setup_observability`, if any."""
+    return getattr(app, SETUP_ATTR, None)

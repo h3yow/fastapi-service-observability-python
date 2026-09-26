@@ -176,7 +176,11 @@ class MetricsASGIMiddleware:
     async def _invoke(self, scope: dict, receive: Any, send: Any) -> tuple[_Facts, BaseException | None]:
         """Run the wrapped app and return its terminal facts."""
         disconnected = anyio.Event()
-        to_app_send, to_app_recv = anyio.create_memory_object_stream[dict](0)
+        # Buffered so the reader keeps pulling client messages (including
+        # http.disconnect) even when the application never calls receive, as
+        # happens for ordinary GET handlers.  Servers apply flow control on
+        # request bodies, so the buffer cannot grow without bound.
+        to_app_send, to_app_recv = anyio.create_memory_object_stream[dict](16)
         app_cancel_scope = anyio.CancelScope()
 
         response_started = False
@@ -216,7 +220,9 @@ class MetricsASGIMiddleware:
                 # The app side went away (timeout/completion); this is not a
                 # client-disconnect signal and must not relabel the request.
                 pass
-            except (anyio.EndOfStream, Exception):
+            except Exception:
+                # EndOfStream or any other receive failure: the client channel
+                # is gone, treat it as a disconnect.
                 disconnected.set()
             finally:
                 with anyio.CancelScope(shield=True):
