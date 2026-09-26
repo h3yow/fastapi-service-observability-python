@@ -5,7 +5,8 @@ metric series can never grow without bound:
 
 * ``route`` is the *route template* (e.g. ``/items/{item_id}``) taken from the
   matched route, never the concrete request path.  Requests that match no
-  route (404/405) collapse to the single value ``__unmatched__``.
+  route (404) collapse to the single value ``__unmatched__``; a 405 keeps the
+  template of the path it matched.
 * ``method`` is the upper-cased HTTP method (a small, protocol-bounded set).
 * ``status`` is the 3-digit response code, or ``none`` when the connection
   ended before any response could be produced.

@@ -8,9 +8,11 @@ Guarantees
   when it leaves -- even on outer cancellation.  All updates go through the
   lock-protected registry, so concurrent requests to the same route cannot
   lose or duplicate counts, and recording cost is O(1) per request.
-* **Route-templated labels.** The route label is resolved up front from the
-  router's route table (template form, e.g. ``/items/{item_id}``); unmatched
-  requests (404/405) collapse to ``__unmatched__``.
+* **Route-templated labels.** The route label comes from the matched route's
+  template (e.g. ``/items/{item_id}``); requests that match no route (404)
+  collapse to ``__unmatched__``.  A method-not-allowed request (405) keeps the
+  template of the path it *did* match -- either way the set of series stays
+  bounded.
 * **Distinguishable failure paths.** Every terminal request is assigned one
   fixed outcome (``ok`` / ``error`` / ``exception`` / ``timeout`` /
   ``client_disconnect``) using the documented precedence in
@@ -173,7 +175,9 @@ class MetricsASGIMiddleware:
         )
 
     # ------------------------------------------------------------------ #
-    async def _invoke(self, scope: dict, receive: Any, send: Any) -> tuple[_Facts, BaseException | None]:
+    async def _invoke(
+        self, scope: dict, receive: Any, send: Any
+    ) -> tuple[_Facts, BaseException | None]:
         """Run the wrapped app and return its terminal facts."""
         disconnected = anyio.Event()
         # Buffered so the reader keeps pulling client messages (including
