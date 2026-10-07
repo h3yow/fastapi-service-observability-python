@@ -179,7 +179,8 @@ def test_mixed_traffic_conservation() -> None:
         assert total == expected
         assert hist_count == expected
         assert inflight_sum == 0
-        assert by_outcome["ok"] == n_ok + n_404   # 404 responses are still completed-ok at HTTP layer
+        assert by_outcome["ok"] == n_ok
+        assert by_outcome["client_error"] == n_404   # 4xx is its own outcome since this version
         assert by_outcome["exception"] == n_err
         assert by_outcome["timeout"] == n_timeout
 
@@ -236,8 +237,12 @@ def test_disabled_duration_metric_hidden_and_conserved() -> None:
             await c.get("/")
         text = await _scrape_text(app)
         print("input: duration_enabled=False; GET /")
-        print("judgement: duration family absent from output; counter still present")
-        assert HTTP_REQUEST_DURATION_SECONDS not in text
+        print("judgement: duration family has no samples in output; counter still present")
+        sample_names = {n for n, _, _ in parse_samples(text)}
+        assert not any(
+            n == HTTP_REQUEST_DURATION_SECONDS or n.startswith(f"{HTTP_REQUEST_DURATION_SECONDS}_")
+            for n in sample_names
+        ), "disabled duration family must not expose any series"
         assert HTTP_REQUESTS_TOTAL in text
         assert HTTP_INFLIGHT in text
         rows = _counter_rows(text)
@@ -270,11 +275,11 @@ def test_method_not_allowed_uses_bounded_template_label() -> None:
         text = await _scrape_text(app)
         rows = _counter_rows(text)
         print("input: POST /items/1 (route exists, method disallowed)")
-        print("judgement: bounded template label /items/{item_id}, status 405; not a raw path")
+        print("judgement: bounded template label /items/{item_id}, status 405, outcome client_error; not a raw path")
         for _, labels, value in rows:
             print(f"  route={labels['route']} status={labels['status']} outcome={labels['outcome']} = {value:g}")
         assert any(
-            l["route"] == "/items/{item_id}" and l["status"] == "405" and l["outcome"] == "ok"
+            l["route"] == "/items/{item_id}" and l["status"] == "405" and l["outcome"] == "client_error"
             for _, l, _ in rows
         )
 

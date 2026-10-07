@@ -8,11 +8,14 @@ metric series can never grow without bound:
   route (404) collapse to the single value ``__unmatched__``; a 405 keeps the
   template of the path it matched.
 * ``method`` is the upper-cased HTTP method (a small, protocol-bounded set).
-* ``status`` is the 3-digit response code, or ``none`` when the connection
-  ended before any response could be produced.
-* ``outcome`` is one of a fixed set of five terminal states (see
-  :data:`ALL_OUTCOMES`) so that errors, timeouts and client disconnects are
-  distinguishable from each other and from normal responses.
+* ``status`` is the 3-digit response code for codes in the standard range
+  100--599, ``other`` for any non-standard code an upstream or proxy may
+  invent, or ``none`` when the connection ended before any response could be
+  produced.
+* ``outcome`` is one of a fixed set of six terminal states (see
+  :data:`ALL_OUTCOMES`) so that client errors, server errors, timeouts and
+  client disconnects are distinguishable from each other and from normal
+  responses.
 """
 from __future__ import annotations
 
@@ -25,8 +28,10 @@ ROUTE_UNMATCHED: Final[str] = "__unmatched__"
 ROUTE_METRICS: Final[str] = "/metrics"
 
 # --- outcome label values ---------------------------------------------------
-#: Response fully sent with status < 500.
+#: Response fully sent with status < 400.
 OUTCOME_OK: Final[str] = "ok"
+#: Response fully sent with a 4xx status (the client sent a bad request).
+OUTCOME_CLIENT_ERROR: Final[str] = "client_error"
 #: Response fully sent with status >= 500 (no exception escaped the app).
 OUTCOME_ERROR: Final[str] = "error"
 #: An exception escaped the application while handling the request.
@@ -38,9 +43,12 @@ OUTCOME_DISCONNECT: Final[str] = "client_disconnect"
 
 #: Status label used when no response status was ever produced.
 STATUS_NONE: Final[str] = "none"
+#: Status label for codes outside the standard 100--599 range.
+STATUS_OTHER: Final[str] = "other"
 
 ALL_OUTCOMES: Final[tuple[str, ...]] = (
     OUTCOME_OK,
+    OUTCOME_CLIENT_ERROR,
     OUTCOME_ERROR,
     OUTCOME_EXCEPTION,
     OUTCOME_TIMEOUT,
@@ -73,10 +81,19 @@ def normalize_route(route: object) -> str:
 
 
 def normalize_status(status: int | None) -> str:
-    """Return the status label (``"200"`` ... ``"599"`` or ``"none"``)."""
+    """Return the status label: ``"200"`` ... ``"599"``, ``"other"`` or ``"none"``.
+
+    Codes inside the standard 100--599 range keep their exact 3-digit form
+    (a protocol-bounded vocabulary).  Anything outside that range -- e.g.
+    non-standard codes invented by upstreams or proxies -- collapses to the
+    single value ``other`` so exotic statuses can never grow the label space.
+    """
     if status is None:
         return STATUS_NONE
-    return str(int(status))
+    code = int(status)
+    if 100 <= code <= 599:
+        return str(code)
+    return STATUS_OTHER
 
 
 def classify_outcome(
@@ -94,8 +111,13 @@ def classify_outcome(
     1. ``timeout``           -- the deadline fired (strongest signal of slowness)
     2. ``client_disconnect`` -- the client went away mid-request
     3. ``exception``         -- an exception escaped the application
-    4. ``error``             -- a 5xx response was fully sent
-    5. ``ok``                -- anything else that produced a response
+    4. ``error``             -- a response with status >= 500 was fully sent
+    5. ``client_error``      -- a 4xx response was fully sent
+    6. ``ok``                -- anything else that produced a response
+
+    Non-standard codes follow the same numeric ranges (e.g. a proxy's 777
+    lands in ``error``), so the six outcomes always add up to the total
+    number of completed requests.
     """
     if timed_out:
         return OUTCOME_TIMEOUT
@@ -110,4 +132,6 @@ def classify_outcome(
         return OUTCOME_EXCEPTION
     if status >= 500:
         return OUTCOME_ERROR
+    if status >= 400:
+        return OUTCOME_CLIENT_ERROR
     return OUTCOME_OK

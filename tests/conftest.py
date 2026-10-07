@@ -9,14 +9,26 @@ import httpx
 import pytest
 
 from observability.factory import create_app
+from observability.metrics import DEFAULT_MAX_SERIES
 from observability.setup import get_registry
 
 if typing.TYPE_CHECKING:
     from fastapi import FastAPI
 
 
-def make_app(*, request_timeout: float | None = 5.0, duration_enabled: bool = True) -> "FastAPI":
-    return create_app(request_timeout=request_timeout, duration_enabled=duration_enabled)
+def make_app(
+    *,
+    request_timeout: float | None = 5.0,
+    enabled: bool = True,
+    duration_enabled: bool = True,
+    max_series: int | None = DEFAULT_MAX_SERIES,
+) -> "FastAPI":
+    return create_app(
+        request_timeout=request_timeout,
+        enabled=enabled,
+        duration_enabled=duration_enabled,
+        max_series=max_series,
+    )
 
 
 def registry_of(app: "FastAPI"):

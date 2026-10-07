@@ -6,15 +6,28 @@ import logging
 
 from fastapi import FastAPI, HTTPException
 
+from .metrics import DEFAULT_MAX_SERIES
 from .setup import setup_observability
 
 logger = logging.getLogger("observability.demo")
 
 
-def create_app(*, request_timeout: float | None = 5.0, duration_enabled: bool = True) -> FastAPI:
+def create_app(
+    *,
+    request_timeout: float | None = 5.0,
+    enabled: bool = True,
+    duration_enabled: bool = True,
+    max_series: int | None = DEFAULT_MAX_SERIES,
+) -> FastAPI:
     """Build a fresh instrumented FastAPI application."""
     app = FastAPI(title="fastapi-service-observability")
-    setup_observability(app, request_timeout=request_timeout, duration_enabled=duration_enabled)
+    setup_observability(
+        app,
+        request_timeout=request_timeout,
+        enabled=enabled,
+        duration_enabled=duration_enabled,
+        max_series=max_series,
+    )
 
     @app.get("/")
     def read_root() -> dict[str, str]:

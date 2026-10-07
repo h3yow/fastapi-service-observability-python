@@ -9,6 +9,7 @@ import pytest
 
 from observability.labels import (
     ALL_OUTCOMES,
+    OUTCOME_CLIENT_ERROR,
     OUTCOME_DISCONNECT,
     OUTCOME_ERROR,
     OUTCOME_EXCEPTION,
@@ -16,6 +17,7 @@ from observability.labels import (
     OUTCOME_TIMEOUT,
     ROUTE_UNMATCHED,
     STATUS_NONE,
+    STATUS_OTHER,
     classify_outcome,
     normalize_method,
     normalize_route,
@@ -61,11 +63,23 @@ def test_normalize_route_bounded(given: object, expected: str) -> None:
 
 @pytest.mark.parametrize(
     ("given", "expected"),
-    [(200, "200"), (404, "404"), (503, "503"), (None, STATUS_NONE)],
+    [
+        (200, "200"),
+        (404, "404"),
+        (503, "503"),
+        (599, "599"),
+        (None, STATUS_NONE),
+        # non-standard codes (upstreams/proxies) collapse to "other"
+        (99, STATUS_OTHER),
+        (0, STATUS_OTHER),
+        (600, STATUS_OTHER),
+        (777, STATUS_OTHER),
+        (999, STATUS_OTHER),
+    ],
 )
 def test_normalize_status(given: int | None, expected: str) -> None:
     actual = normalize_status(given)
-    _report("status", given, "3-digit code; None -> none", expected, actual)
+    _report("status", given, "100-599 keep 3-digit code; None -> none; else -> other", expected, actual)
     assert actual == expected
 
 
@@ -73,14 +87,20 @@ def test_normalize_status(given: int | None, expected: str) -> None:
     ("status", "raised", "timed_out", "disconnected", "expected"),
     [
         (200, False, False, False, OUTCOME_OK),
-        (404, False, False, False, OUTCOME_OK),
+        (302, False, False, False, OUTCOME_OK),
+        (400, False, False, False, OUTCOME_CLIENT_ERROR),
+        (404, False, False, False, OUTCOME_CLIENT_ERROR),
+        (499, False, False, False, OUTCOME_CLIENT_ERROR),
         (500, False, False, False, OUTCOME_ERROR),
         (503, False, False, False, OUTCOME_ERROR),
+        # non-standard codes classify by the same numeric ranges
+        (777, False, False, False, OUTCOME_ERROR),
+        (99, False, False, False, OUTCOME_OK),
         (None, True, False, False, OUTCOME_EXCEPTION),
         (500, True, False, False, OUTCOME_EXCEPTION),
         (None, False, True, False, OUTCOME_TIMEOUT),
         (None, False, False, True, OUTCOME_DISCONNECT),
-        # precedence checks: timeout > disconnect > exception > error > ok
+        # precedence: timeout > disconnect > exception > error > client_error > ok
         (None, True, True, True, OUTCOME_TIMEOUT),
         (None, True, False, True, OUTCOME_DISCONNECT),
         (500, True, False, False, OUTCOME_EXCEPTION),
@@ -92,6 +112,6 @@ def test_classify_outcome(
 ) -> None:
     actual = classify_outcome(status, raised=raised, timed_out=timed_out, disconnected=disconnected)
     given = dict(status=status, raised=raised, timed_out=timed_out, disconnected=disconnected)
-    _report("outcome", given, "timeout>disconnect>exception>error(5xx)>ok", expected, actual)
+    _report("outcome", given, "timeout>disconnect>exception>error(5xx)>client_error(4xx)>ok", expected, actual)
     assert actual == expected
     assert actual in ALL_OUTCOMES
