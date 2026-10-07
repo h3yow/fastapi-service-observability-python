@@ -11,10 +11,22 @@ from .setup import setup_observability
 logger = logging.getLogger("observability.demo")
 
 
-def create_app(*, request_timeout: float | None = 5.0, duration_enabled: bool = True) -> FastAPI:
+def create_app(
+    *,
+    request_timeout: float | None = 5.0,
+    duration_enabled: bool = True,
+    max_series: int | None = 500,
+    enabled: bool = True,
+) -> FastAPI:
     """Build a fresh instrumented FastAPI application."""
     app = FastAPI(title="fastapi-service-observability")
-    setup_observability(app, request_timeout=request_timeout, duration_enabled=duration_enabled)
+    setup_observability(
+        app,
+        request_timeout=request_timeout,
+        duration_enabled=duration_enabled,
+        max_series=max_series,
+        enabled=enabled,
+    )
 
     @app.get("/")
     def read_root() -> dict[str, str]:

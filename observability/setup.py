@@ -11,7 +11,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from .endpoint import build_metrics_router
-from .metrics import HTTP_REQUEST_DURATION_SECONDS, create_http_registry
+from .metrics import DEFAULT_MAX_SERIES, HTTP_REQUEST_DURATION_SECONDS, create_http_registry
 from .middleware import MetricsASGIMiddleware
 from .registry import MetricsRegistry
 
@@ -25,8 +25,16 @@ def setup_observability(
     request_timeout: float | None = 5.0,
     duration_enabled: bool = True,
     registry: MetricsRegistry | None = None,
+    max_series: int | None = DEFAULT_MAX_SERIES,
+    enabled: bool = True,
 ) -> MetricsRegistry:
     """Attach metrics middleware and the ``/metrics`` endpoint to ``app``.
+
+    ``max_series`` is the per-family cardinality cap (a positive integer;
+    ``None`` disables the cap).  ``enabled=False`` starts the pipeline
+    switched off -- the middleware is still attached and requests are
+    handled normally, but every metric write is a no-op and ``/metrics``
+    renders nothing, the self-monitoring families included.
 
     Returns the registry in use (the existing one on repeated calls).
     """
@@ -35,9 +43,15 @@ def setup_observability(
         return existing
 
     if registry is None:
-        registry = create_http_registry(duration_enabled=duration_enabled)
+        registry = create_http_registry(
+            duration_enabled=duration_enabled, max_series=max_series, enabled=enabled
+        )
     else:
         registry.set_enabled(HTTP_REQUEST_DURATION_SECONDS, duration_enabled)
+        if enabled:
+            registry.set_pipeline_enabled(True)
+        else:
+            registry.set_pipeline_enabled(False)
 
     app.include_router(build_metrics_router(registry))
     app.add_middleware(

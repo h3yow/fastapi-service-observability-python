@@ -15,8 +15,19 @@ if typing.TYPE_CHECKING:
     from fastapi import FastAPI
 
 
-def make_app(*, request_timeout: float | None = 5.0, duration_enabled: bool = True) -> "FastAPI":
-    return create_app(request_timeout=request_timeout, duration_enabled=duration_enabled)
+def make_app(
+    *,
+    request_timeout: float | None = 5.0,
+    duration_enabled: bool = True,
+    max_series: int | None = 500,
+    enabled: bool = True,
+) -> "FastAPI":
+    return create_app(
+        request_timeout=request_timeout,
+        duration_enabled=duration_enabled,
+        max_series=max_series,
+        enabled=enabled,
+    )
 
 
 def registry_of(app: "FastAPI"):

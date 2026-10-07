@@ -16,7 +16,15 @@ Guarantees
 * **Distinguishable failure paths.** Every terminal request is assigned one
   fixed outcome (``ok`` / ``error`` / ``exception`` / ``timeout`` /
   ``client_disconnect``) using the documented precedence in
-  :func:`observability.labels.classify_outcome`.
+  :func:`observability.labels.classify_outcome`, and one dashboard-ready
+  ``result`` class (``success`` / ``client_error`` / ``server_error`` /
+  ``exception`` / ``timeout`` / ``client_disconnect``) via
+  :func:`observability.labels.classify_result`.  Non-standard status codes
+  collapse to ``status="other"`` instead of opening fresh series.
+* **Cardinality safety lives in the registry.** Every recorded combination
+  passes through the per-family cap, so an exhausted budget funnels this
+  request into the single ``__overflow__`` fallback series; totals and
+  histogram buckets stay conserved and the request is never dropped.
 
 A request that produced a complete response is never relabelled as timeout or
 client-disconnect even if such an event arrives afterwards, which prevents
@@ -34,6 +42,7 @@ from starlette.routing import Match
 from .labels import (
     ROUTE_UNMATCHED,
     classify_outcome,
+    classify_result,
     normalize_method,
     normalize_route,
     normalize_status,
@@ -157,6 +166,9 @@ class MetricsASGIMiddleware:
         outcome = classify_outcome(
             status, raised=raised, timed_out=timed_out, disconnected=disconnected
         )
+        result = classify_result(
+            status, raised=raised, timed_out=timed_out, disconnected=disconnected
+        )
         duration = anyio.current_time() - started
         self.registry.inc_counter(
             HTTP_REQUESTS_TOTAL,
@@ -165,6 +177,7 @@ class MetricsASGIMiddleware:
                 ("route", route),
                 ("status", normalize_status(status)),
                 ("outcome", outcome),
+                ("result", result),
             ),
             1.0,
         )

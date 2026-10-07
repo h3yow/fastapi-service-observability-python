@@ -110,9 +110,10 @@ def test_client_disconnect_is_distinguishable() -> None:
         assert reg.counter_value(
             HTTP_REQUESTS_TOTAL,
             (("method", "GET"), ("route", "/slow"), ("status", "none"),
-             ("outcome", "client_disconnect")),
+             ("outcome", "client_disconnect"), ("result", "client_disconnect")),
         ) == 1.0
-        print("  counter series: method=GET route=/slow status=none outcome=client_disconnect = 1")
+        print("  counter series: method=GET route=/slow status=none "
+              "outcome=client_disconnect result=client_disconnect = 1")
 
     asyncio.run(scenario())
 

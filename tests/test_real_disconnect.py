@@ -57,7 +57,7 @@ def test_client_disconnect_on_real_server() -> None:
             return reg.counter_value(
                 HTTP_REQUESTS_TOTAL,
                 (("method", "GET"), ("route", "/slow"), ("status", "none"),
-                 ("outcome", "client_disconnect")),
+                 ("outcome", "client_disconnect"), ("result", "client_disconnect")),
             ) == 1.0
 
         assert _wait_for(disconnect_recorded), "client_disconnect outcome was never recorded"
